@@ -7058,14 +7058,26 @@ namespace ts {
             // mark captured block scoped binding
             const links = getNodeLinks(<VariableDeclaration>symbol.valueDeclaration);
 
-            if (usedInFunction) {
-                links.flags |= NodeCheckFlags.CapturedBlockScopedBinding;
+            const isCapturedNestedBlockScopedBinding =
+                usedInFunction &&
+                (container.kind === SyntaxKind.CaseBlock || 
+                    (
+                        container.kind === SyntaxKind.Block && 
+                        !isIterationStatement(container.parent, false) &&
+                        !isFunctionBlock(container)
+                    )
+                );
+            if (isCapturedNestedBlockScopedBinding) {
+                // do not mark variables that are declared in initializers of For/ForIn/ForOf statements are captured
+                // after loop body will be rewritten these variables will be passes into the loop body function as parameters so technically they are not captured
+                // and there is no need to rename them
+                links.flags |= NodeCheckFlags.CapturedNestedBlockScopedBinding;
             }
 
             while (current && !nodeStartsNewLexicalEnvironment(current)) {
                 if (isIterationStatement(current, /*lookInLabeledStatements*/ false)) {
                     if (usedInFunction) {
-                        // mark iteration statement as containing block scoped binding that is captured in loop
+                        // mark iteration statement as containing block scoped binding captured in some function
                         getNodeLinks(current).flags |= NodeCheckFlags.LoopWithCapturedBlockScopedBinding;
                     }
                     links.flags |= NodeCheckFlags.BlockScopedBindingDefinedInLoop;
@@ -15434,36 +15446,39 @@ namespace ts {
                 if (links.isDeclaratonWithCollidingName === undefined) {
                     const container = getEnclosingBlockScopeContainer(symbol.valueDeclaration);
                     if (isStatementWithLocals(container)) {
-                        // declaration name posssibly collides with something in enclosing scope if:
-                        // - current block scoped declaration has the same name as something that is declared higher in the function scope (definite collision)
-                        // - current block scoped declaration is captured in function so it is important to preserve its identify.
-                        //   Consider this example
-                        //   let f;
-                        //   { let x = 1; f = () => x; }
-                        //   { let x = 5 }
-                        //   let y = f();
-                        //   'x' in the first block is not redeclaration in original code however if we emit it downlevel
-                        //   'let' will be rewritten as 'var' and so the scope of name 'x' will be extended
-                        //   here we'll consider first 'x' as colliding so emitter can introduce a fresh name for it.
-                        if (resolveName(container.parent, symbol.name, SymbolFlags.Value, /*nameNotFoundMessage*/ undefined, /*nameArg*/ undefined)) {
-                            // redeclaration
-                            links.isDeclaratonWithCollidingName = true;
-                        }
-                        else if (getNodeLinks(symbol.valueDeclaration).flags & NodeCheckFlags.CapturedBlockScopedBinding) {
-                            // captured block scoped binding
-                            // block scoped bindings that are either declared in the For/ForIn/ForOf statement initializer 
-                            // or immediatly nested in the iteration statement body block 
-                            // are not considered colliding -
-                            // iteration statements that contains declarations of captured block scoped bindings
-                            // are rewritten as functions so content of loop body will become top level scope of function. 
-                            // Variables declared in the For/ForIn/ForOf statement initializer will be passed to the rewritten loop as parameters so they are effectively non-captured
-                            // and thus don't need to be renamed 
-                            links.isDeclaratonWithCollidingName = container.kind === SyntaxKind.CaseBlock ||
-                                (container.kind === SyntaxKind.Block && !isIterationStatement(container.parent, /*lookInLabeledStatements*/ false) && !isFunctionLike(container.parent)) ;
-                        }
-                        else {
-                            links.isDeclaratonWithCollidingName = false;
-                        }
+                        links.isDeclaratonWithCollidingName = 
+                            !!(getNodeLinks(symbol.valueDeclaration).flags & NodeCheckFlags.CapturedNestedBlockScopedBinding) ||
+                            !!resolveName(container.parent, symbol.name, SymbolFlags.Value, /*nameNotFoundMessage*/ undefined, /*nameArg*/ undefined);
+//                         // declaration name posssibly collides with something in enclosing scope if:
+//                         // - current block scoped declaration has the same name as something that is declared higher in the function scope (definite collision)
+//                         // - current block scoped declaration is captured in function so it is important to preserve its identify.
+//                         //   Consider this example
+//                         //   let f;
+//                         //   { let x = 1; f = () => x; }
+//                         //   { let x = 5 }
+//                         //   let y = f();
+//                         //   'x' in the first block is not redeclaration in original code however if we emit it downlevel
+//                         //   'let' will be rewritten as 'var' and so the scope of name 'x' will be extended
+//                         //   here we'll consider first 'x' as colliding so emitter can introduce a fresh name for it.
+//                         if (resolveName(container.parent, symbol.name, SymbolFlags.Value, /*nameNotFoundMessage*/ undefined, /*nameArg*/ undefined)) {
+//                             // redeclaration
+//                             links.isDeclaratonWithCollidingName = true;
+//                         }
+//                         else if (getNodeLinks(symbol.valueDeclaration).flags & NodeCheckFlags.CapturedNestedBlockScopedBinding) {
+//                             // captured block scoped binding
+//                             // block scoped bindings that are either declared in the For/ForIn/ForOf statement initializer 
+//                             // or immediatly nested in the iteration statement body block 
+//                             // are not considered colliding -
+//                             // iteration statements that contains declarations of captured block scoped bindings
+//                             // are rewritten as functions so content of loop body will become top level scope of function. 
+//                             // Variables declared in the For/ForIn/ForOf statement initializer will be passed to the rewritten loop as parameters so they are effectively non-captured
+//                             // and thus don't need to be renamed 
+//                             links.isDeclaratonWithCollidingName = container.kind === SyntaxKind.CaseBlock || container.kind === SyntaxKind.Block;
+// //                                (container.kind === SyntaxKind.Block && !isIterationStatement(container.parent, /*lookInLabeledStatements*/ false) && !isFunctionLike(container.parent)) ;
+//                         }
+//                         else {
+//                             links.isDeclaratonWithCollidingName = false;
+//                         }
                     }
                 }
                 return links.isDeclaratonWithCollidingName;

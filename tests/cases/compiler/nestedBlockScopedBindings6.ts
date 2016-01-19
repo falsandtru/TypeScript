@@ -1,5 +1,4 @@
 function a0() {
-    let y;
     for (let x of [1]) {
         x = x + 1;
     }
@@ -9,7 +8,6 @@ function a0() {
 }
 
 function a1() {
-    let y;
     for (let x of [1]) {
         x = x + 1;
         () => x;
@@ -20,7 +18,6 @@ function a1() {
 }
 
 function a2() {
-    let y;
     for (let x of [1]) {
         x = x + 1;
     }
@@ -30,9 +27,7 @@ function a2() {
     }
 }
 
-
 function a3() {
-    let y;
     for (let x of [1]) {
         x = x + 1;
         () => x;
@@ -44,7 +39,6 @@ function a3() {
 }
 
 function a4() {
-    let y;
     for (let x of [1]) {
         x = x + 1;
         () => x;
@@ -58,7 +52,6 @@ function a4() {
 
 
 function a5() {
-    let y;
     for (let x of [1]) {
         x = x + 1;
     }
@@ -71,7 +64,6 @@ function a5() {
 }
 
 function a6() {
-    let y;
     for (let x of [1]) {
         x = x + 1;
     }
@@ -82,9 +74,7 @@ function a6() {
     }
 }
 
-
 function a7() {
-    let y;
     for (let x of [1]) {
         x = x + 1;
         () => x;
@@ -96,5 +86,3 @@ function a7() {
             break;
     }
 }
-
-

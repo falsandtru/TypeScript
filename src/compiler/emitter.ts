@@ -4050,8 +4050,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                         const emitInitializer =
                             isNestedLet &&
-                            (container.kind === SyntaxKind.ForStatement || (flags & NodeCheckFlags.CapturedBlockScopedBinding) === 0) &&
-                            (flags & NodeCheckFlags.BlockScopedBindingDefinedInLoop || !resolver.isDeclarationWithCollidingName(node)) &&
+                            (flags & NodeCheckFlags.CapturedNestedBlockScopedBinding) === 0 &&
+                            //(flags & NodeCheckFlags.BlockScopedBindingDefinedInLoop || !resolver.isDeclarationWithCollidingName(node)) &&
                             container.kind !== SyntaxKind.ForInStatement &&
                             container.kind !== SyntaxKind.ForOfStatement;
                         // NOTES: 
