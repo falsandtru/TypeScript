@@ -7052,21 +7052,26 @@ namespace ts {
             // if there is an iteration statement in between declaration and boundary (is binding/class declared inside iteration statement)
 
             const container = getEnclosingBlockScopeContainer(symbol.valueDeclaration);
-            const inFunction = isInsideFunction(node.parent, container);
+            const usedInFunction = isInsideFunction(node.parent, container);
             let current = container;
 
-            if (inFunction) {
-                // mark captured block scoped binding
-                getNodeLinks(<VariableDeclaration>symbol.valueDeclaration).flags |= NodeCheckFlags.CapturedBlockScopedBinding;
+            // mark captured block scoped binding
+            const links = getNodeLinks(<VariableDeclaration>symbol.valueDeclaration);
 
-                while (current && !nodeStartsNewLexicalEnvironment(current)) {
-                    if (isIterationStatement(current, /*lookInLabeledStatements*/ false)) {
+            if (usedInFunction) {
+                links.flags |= NodeCheckFlags.CapturedBlockScopedBinding;
+            }
+
+            while (current && !nodeStartsNewLexicalEnvironment(current)) {
+                if (isIterationStatement(current, /*lookInLabeledStatements*/ false)) {
+                    if (usedInFunction) {
                         // mark iteration statement as containing block scoped binding that is captured in loop
                         getNodeLinks(current).flags |= NodeCheckFlags.LoopWithCapturedBlockScopedBinding;
-                        break;
                     }
-                    current = current.parent;
+                    links.flags |= NodeCheckFlags.BlockScopedBindingDefinedInLoop;
+                    break;
                 }
+                current = current.parent;
             }
         }
 

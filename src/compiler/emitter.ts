@@ -4046,19 +4046,21 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                             isStatementWithLocals(container) &&
                             !isFunctionLike(container.parent);
 
-                        const isCaptured = resolver.getNodeCheckFlags(node) & NodeCheckFlags.CapturedBlockScopedBinding;
+                        const flags = resolver.getNodeCheckFlags(node);
 
+                        const emitInitializer =
+                            isNestedLet &&
+                            (container.kind === SyntaxKind.ForStatement || (flags & NodeCheckFlags.CapturedBlockScopedBinding) === 0) &&
+                            (flags & NodeCheckFlags.BlockScopedBindingDefinedInLoop || !resolver.isDeclarationWithCollidingName(node)) &&
+                            container.kind !== SyntaxKind.ForInStatement &&
+                            container.kind !== SyntaxKind.ForOfStatement;
                         // NOTES: 
                         // * initialize nested let bindings if
                         //   - they are not captured (so they won;t see old values)
                         //   - if they are defined in for-statement initializer
                         // * there is no point to initialize bindings that will also be renamed
                         // * default initialization should not be added to let bindings in for-in\for-of statements
-                        if (isNestedLet &&
-                            (!isCaptured || container.kind === SyntaxKind.ForStatement) && 
-                            !resolver.isDeclarationWithCollidingName(node) &&
-                            container.kind !== SyntaxKind.ForInStatement && 
-                            container.kind !== SyntaxKind.ForOfStatement) {
+                        if (emitInitializer) {
                             initializer = createVoidZero();
                         }
                     }
