@@ -151,6 +151,18 @@ namespace ts {
         return <SourceFile>node;
     }
 
+    export function isStatementWithLocals(node: Node) {
+        switch (node.kind) {
+            case SyntaxKind.Block:
+            case SyntaxKind.CaseBlock:
+            case SyntaxKind.ForStatement:
+            case SyntaxKind.ForInStatement:
+            case SyntaxKind.ForOfStatement:
+                return true;
+        }
+        return false;
+    }
+
     export function getStartPositionOfLine(line: number, sourceFile: SourceFile): number {
         Debug.assert(line >= 0);
         return getLineStarts(sourceFile)[line];

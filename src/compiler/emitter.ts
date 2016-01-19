@@ -1540,7 +1540,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                     }
 
                     if (languageVersion !== ScriptTarget.ES6) {
-                        const declaration = resolver.getReferencedNestedRedeclaration(node);
+                        const declaration = resolver.getReferencedDeclarationWithCollidingName(node);
                         if (declaration) {
                             write(getGeneratedNameForNode(declaration.name));
                             return;
@@ -1556,7 +1556,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
             }
 
-            function isNameOfNestedRedeclaration(node: Identifier) {
+            function isNameOfNestedBlockScopedRedeclarationOrCapturedBinding(node: Identifier) {
                 if (languageVersion < ScriptTarget.ES6) {
                     const parent = node.parent;
                     switch (parent.kind) {
@@ -1564,7 +1564,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         case SyntaxKind.ClassDeclaration:
                         case SyntaxKind.EnumDeclaration:
                         case SyntaxKind.VariableDeclaration:
-                            return (<Declaration>parent).name === node && resolver.isNestedRedeclaration(<Declaration>parent);
+                            return (<Declaration>parent).name === node && resolver.isDeclarationWithCollidingName(<Declaration>parent);
                     }
                 }
                 return false;
@@ -1586,7 +1586,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 else if (isExpressionIdentifier(node)) {
                     emitExpressionIdentifier(node);
                 }
-                else if (isNameOfNestedRedeclaration(node)) {
+                else if (isNameOfNestedBlockScopedRedeclarationOrCapturedBinding(node)) {
                     write(getGeneratedNameForNode(node));
                 }
                 else if (nodeIsSynthesized(node)) {
@@ -2860,7 +2860,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
             function shouldConvertLoopBody(node: IterationStatement): boolean {
                 return languageVersion < ScriptTarget.ES6 &&
-                    (resolver.getNodeCheckFlags(node) & NodeCheckFlags.LoopWithBlockScopedBindingCapturedInFunction) !== 0;
+                    (resolver.getNodeCheckFlags(node) & NodeCheckFlags.LoopWithCapturedBlockScopedBinding) !== 0;
             }
 
             function emitLoop(node: IterationStatement, loopEmitter: (n: IterationStatement, convertedLoop: ConvertedLoop) => void): void {
@@ -3014,7 +3014,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
 
                 function collectNames(name: Identifier | BindingPattern): void {
                     if (name.kind === SyntaxKind.Identifier) {
-                        const nameText = isNameOfNestedRedeclaration(<Identifier>name) ? getGeneratedNameForNode(name) : (<Identifier>name).text;
+                        const nameText = isNameOfNestedBlockScopedRedeclarationOrCapturedBinding(<Identifier>name) ? getGeneratedNameForNode(name) : (<Identifier>name).text;
                         loopParameters.push(nameText);
                     }
                     else {
@@ -4030,22 +4030,35 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                 }
                 else {
                     let initializer = node.initializer;
-                    if (!initializer && languageVersion < ScriptTarget.ES6) {
+                    if (!initializer && 
+                        languageVersion < ScriptTarget.ES6 &&
+                        // for names - binding patterns that lack initializer there is no point to emit explicit initializer 
+                        // since downlevel codegen for destructuring will fail in the absence of initializer so all binding elements will say uninitialized
+                        node.name.kind === SyntaxKind.Identifier) {
 
-                        // downlevel emit for non-initialized let bindings defined in loops
-                        // for (...) {  let x; }
-                        // should be
-                        // for (...) { var <some-uniqie-name> = void 0; }
-                        // this is necessary to preserve ES6 semantic in scenarios like
-                        // for (...) { let x; console.log(x); x = 1 } // assignment on one iteration should not affect other iterations
-                        const isLetDefinedInLoop =
-                            (resolver.getNodeCheckFlags(node) & NodeCheckFlags.BlockScopedBindingInLoop) &&
-                            (getCombinedFlagsForIdentifier(<Identifier>node.name) & NodeFlags.Let);
+                        const container = getEnclosingBlockScopeContainer(node);
+                        // for nested let bindings always generate explicit initializer unless they are captured in loop
+                        // downlevel emit for loops with captured block scoped bindings will introduce an explicit scope for every iteration
+                        // so values won't be shared between iterations
+                        //const container = getDeclarationContainer(node);
+                        const isNestedLet = 
+                            getCombinedNodeFlags(node) & NodeFlags.Let &&
+                            isStatementWithLocals(container) &&
+                            !isFunctionLike(container.parent);
 
-                        // NOTE: default initialization should not be added to let bindings in for-in\for-of statements
-                        if (isLetDefinedInLoop &&
-                            node.parent.parent.kind !== SyntaxKind.ForInStatement &&
-                            node.parent.parent.kind !== SyntaxKind.ForOfStatement) {
+                        const isCaptured = resolver.getNodeCheckFlags(node) & NodeCheckFlags.CapturedBlockScopedBinding;
+
+                        // NOTES: 
+                        // * initialize nested let bindings if
+                        //   - they are not captured (so they won;t see old values)
+                        //   - if they are defined in for-statement initializer
+                        // * there is no point to initialize bindings that will also be renamed
+                        // * default initialization should not be added to let bindings in for-in\for-of statements
+                        if (isNestedLet &&
+                            (!isCaptured || container.kind === SyntaxKind.ForStatement) && 
+                            !resolver.isDeclarationWithCollidingName(node) &&
+                            container.kind !== SyntaxKind.ForInStatement && 
+                            container.kind !== SyntaxKind.ForOfStatement) {
                             initializer = createVoidZero();
                         }
                     }

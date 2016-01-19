@@ -7051,57 +7051,21 @@ namespace ts {
             // 2. walk from the declaration up to the boundary of lexical environment and check
             // if there is an iteration statement in between declaration and boundary (is binding/class declared inside iteration statement)
 
-            let container: Node;
-            if (symbol.flags & SymbolFlags.Class) {
-                // get parent of class declaration
-                container = getClassLikeDeclarationOfSymbol(symbol).parent;
-            }
-            else {
-                // nesting structure:
-                // (variable declaration or binding element) -> variable declaration list -> container
-                container = symbol.valueDeclaration;
-                while (container.kind !== SyntaxKind.VariableDeclarationList) {
-                    container = container.parent;
-                }
-                // get the parent of variable declaration list
-                container = container.parent;
-                if (container.kind === SyntaxKind.VariableStatement) {
-                    // if parent is variable statement - get its parent
-                    container = container.parent;
-                }
-            }
-
+            const container = getEnclosingBlockScopeContainer(symbol.valueDeclaration);
             const inFunction = isInsideFunction(node.parent, container);
-            let enclosingIterationStatement: Node;
             let current = container;
 
             if (inFunction) {
+                // mark captured block scoped binding
+                getNodeLinks(<VariableDeclaration>symbol.valueDeclaration).flags |= NodeCheckFlags.CapturedBlockScopedBinding;
+
                 while (current && !nodeStartsNewLexicalEnvironment(current)) {
                     if (isIterationStatement(current, /*lookInLabeledStatements*/ false)) {
-                        enclosingIterationStatement = current;
+                        // mark iteration statement as containing block scoped binding that is captured in loop
+                        getNodeLinks(current).flags |= NodeCheckFlags.LoopWithCapturedBlockScopedBinding;
                         break;
                     }
                     current = current.parent;
-                }
-            }
-
-            if (enclosingIterationStatement) {
-                // mark iteration statement as containing block scoped binding that is captured in loop
-                getNodeLinks(enclosingIterationStatement).flags |= NodeCheckFlags.LoopWithCapturedBlockScopedBinding;
-            }
-
-            if (isStatementWithLocals(container)) {
-                // mark nested block scoped bindings
-                const links = getNodeLinks(<VariableDeclaration>symbol.valueDeclaration);
-                const declaredInIterationStatement =
-                    isIterationStatement(container, /*lookInLabeledStatements*/ false) ||
-                    container.kind === SyntaxKind.Block && isIterationStatement(container.parent, /*lookInLabeledStatements*/ false);
-
-                if (inFunction && declaredInIterationStatement) {
-                    links.flags |= NodeCheckFlags.NestedCapturedBlockScopedBinding;
-                }
-                else {
-                    links.flags |= NodeCheckFlags.NestedBlockScopedBinding;
                 }
             }
         }
@@ -15459,42 +15423,61 @@ namespace ts {
             return symbol && symbol.flags & SymbolFlags.Alias ? getDeclarationOfAliasSymbol(symbol) : undefined;
         }
 
-        function isStatementWithLocals(node: Node) {
-            switch (node.kind) {
-                case SyntaxKind.Block:
-                case SyntaxKind.CaseBlock:
-                case SyntaxKind.ForStatement:
-                case SyntaxKind.ForInStatement:
-                case SyntaxKind.ForOfStatement:
-                    return true;
-            }
-            return false;
-        }
-
-        function isNestedRedeclarationSymbol(symbol: Symbol): boolean {
+        function isSymbolOfDeclarationWithCollidingName(symbol: Symbol): boolean {
             if (symbol.flags & SymbolFlags.BlockScoped) {
                 const links = getSymbolLinks(symbol);
-                if (links.isNestedRedeclaration === undefined) {
+                if (links.isDeclaratonWithCollidingName === undefined) {
                     const container = getEnclosingBlockScopeContainer(symbol.valueDeclaration);
-                    links.isNestedRedeclaration = isStatementWithLocals(container) &&
-                        !!resolveName(container.parent, symbol.name, SymbolFlags.Value, /*nameNotFoundMessage*/ undefined, /*nameArg*/ undefined);
+                    if (isStatementWithLocals(container)) {
+                        // declaration name posssibly collides with something in enclosing scope if:
+                        // - current block scoped declaration has the same name as something that is declared higher in the function scope (definite collision)
+                        // - current block scoped declaration is captured in function so it is important to preserve its identify.
+                        //   Consider this example
+                        //   let f;
+                        //   { let x = 1; f = () => x; }
+                        //   { let x = 5 }
+                        //   let y = f();
+                        //   'x' in the first block is not redeclaration in original code however if we emit it downlevel
+                        //   'let' will be rewritten as 'var' and so the scope of name 'x' will be extended
+                        //   here we'll consider first 'x' as colliding so emitter can introduce a fresh name for it.
+                        if (resolveName(container.parent, symbol.name, SymbolFlags.Value, /*nameNotFoundMessage*/ undefined, /*nameArg*/ undefined)) {
+                            // redeclaration
+                            links.isDeclaratonWithCollidingName = true;
+                        }
+                        else if (getNodeLinks(symbol.valueDeclaration).flags & NodeCheckFlags.CapturedBlockScopedBinding) {
+                            // captured block scoped binding
+                            // block scoped bindings that are either declared in the For/ForIn/ForOf statement initializer 
+                            // or immediatly nested in the iteration statement body block 
+                            // are not considered colliding -
+                            // iteration statements that contains declarations of captured block scoped bindings
+                            // are rewritten as functions so content of loop body will become top level scope of function. 
+                            // Variables declared in the For/ForIn/ForOf statement initializer will be passed to the rewritten loop as parameters so they are effectively non-captured
+                            // and thus don't need to be renamed 
+                            links.isDeclaratonWithCollidingName = container.kind === SyntaxKind.CaseBlock ||
+                                (container.kind === SyntaxKind.Block && !isIterationStatement(container.parent, /*lookInLabeledStatements*/ false) && !isFunctionLike(container.parent)) ;
+                        }
+                        else {
+                            links.isDeclaratonWithCollidingName = false;
+                        }
+                    }
                 }
-                return links.isNestedRedeclaration;
+                return links.isDeclaratonWithCollidingName;
             }
             return false;
         }
 
         // When resolved as an expression identifier, if the given node references a nested block scoped entity with
-        // a name that hides an existing name, return the declaration of that entity. Otherwise, return undefined.
-        function getReferencedNestedRedeclaration(node: Identifier): Declaration {
+        // a name that either hides an existing name or might hide it when compiled downlevel,
+        // return the declaration of that entity. Otherwise, return undefined.
+        function getReferencedDeclarationWithCollidingName(node: Identifier): Declaration {
             const symbol = getReferencedValueSymbol(node);
-            return symbol && isNestedRedeclarationSymbol(symbol) ? symbol.valueDeclaration : undefined;
+            return symbol && isSymbolOfDeclarationWithCollidingName(symbol) ? symbol.valueDeclaration : undefined;
         }
 
-        // Return true if the given node is a declaration of a nested block scoped entity with a name that hides an
-        // existing name.
-        function isNestedRedeclaration(node: Declaration): boolean {
-            return isNestedRedeclarationSymbol(getSymbolOfNode(node));
+        // Return true if the given node is a declaration of a nested block scoped entity with a name that either hides an
+        // existing name or might hide a name when compiled downlevel
+        function isDeclarationWithCollidingName(node: Declaration): boolean {
+            return isSymbolOfDeclarationWithCollidingName(getSymbolOfNode(node));
         }
 
         function isValueAliasDeclaration(node: Node): boolean {
@@ -15695,8 +15678,8 @@ namespace ts {
             return {
                 getReferencedExportContainer,
                 getReferencedImportDeclaration,
-                getReferencedNestedRedeclaration,
-                isNestedRedeclaration,
+                getReferencedDeclarationWithCollidingName,
+                isDeclarationWithCollidingName,
                 isValueAliasDeclaration,
                 hasGlobalName,
                 isReferencedAliasDeclaration,
