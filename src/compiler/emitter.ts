@@ -4055,7 +4055,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                             container.kind !== SyntaxKind.ForOfStatement &&
                             (
                                 !renamed || 
-                                (inLoop && !captured)
+                                (inLoop && !captured && !isIterationStatement(container, false))
                                 //!captured// isIterationStatement(container, /*lookInLabeledStatements*/ false)
                                 // (!renamed && isIterationStatement(container, /*lookInLabeledStatements*/ false)) ||
                                 //  !renamed && (!captured || )
