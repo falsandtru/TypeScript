@@ -7000,52 +7000,27 @@ namespace ts {
             const usedInFunction = isInsideFunction(node.parent, container);
             let current = container;
 
-            const links = getNodeLinks(<VariableDeclaration>symbol.valueDeclaration);
-
-            let containingIterationStatement: Node;
+            let containedInIterationStatement = false;
             while (current && !nodeStartsNewLexicalEnvironment(current)) {
                 if (isIterationStatement(current, /*lookInLabeledStatements*/ false)) {
-                    containingIterationStatement = current;
+                    containedInIterationStatement = true;
                     break;
                 }
                 current = current.parent;
             }
 
-            const capturedBindingInLoop = containingIterationStatement && usedInFunction;
-            const isNested = isStatementWithLocals(container) && !isFunctionBlock(container);
-            const isDirectlyInLoopBody = container.kind === SyntaxKind.Block && isIterationStatement(container.parent, false);
-            const isInLoopInitializer = isIterationStatement(container, false);
-
-            if (containingIterationStatement) {
+            if (containedInIterationStatement) {
                 if (usedInFunction) {
                     // mark iteration statement as containing block-scoped binding captured in some function 
                     getNodeLinks(current).flags |= NodeCheckFlags.LoopWithCapturedBlockScopedBinding;
                 }
+                // set 'declared inside loop' bit on the block-scoped binding
                 getNodeLinks(symbol.valueDeclaration).flags |= NodeCheckFlags.BlockScopedBindingInLoop;
             }
 
             if (usedInFunction) {
                 getNodeLinks(symbol.valueDeclaration).flags |= NodeCheckFlags.CapturedBlockScopedBinding;
             }
-
-//             // what to rename - captured \ nested (however don't rename things that appear at the top level of loop that will be rewritten into function)
-//             const rename = 
-//                 usedInFunction && 
-//                 isNested &&
-//                 (!capturedBindingInLoop || (!isDirectlyInLoopBody && !isInLoopInitializer));
-// 
-//             if (rename) {
-//                 getNodeLinks(symbol.valueDeclaration).flags |= NodeCheckFlags.CapturedBlockScopedBinding;
-//             }
-// 
-//             const initialize = 
-//                 getCombinedNodeFlags(symbol.valueDeclaration) & NodeFlags.Let &&
-//                 isNested &&
-//                 (!usedInFunction || isInLoopInitializer);
-// 
-//             if (initialize) {
-//                 getNodeLinks(symbol.valueDeclaration).flags |= NodeCheckFlags.BlockScopedBindingInLoop;
-//             }
         }
 
         function captureLexicalThis(node: Node, container: Node): void {
@@ -15409,20 +15384,31 @@ namespace ts {
                     if (isStatementWithLocals(container)) {
                         const nodeLinks = getNodeLinks(symbol.valueDeclaration);
                         if (!!resolveName(container.parent, symbol.name, SymbolFlags.Value, /*nameNotFoundMessage*/ undefined, /*nameArg*/ undefined)) {
-                            // redeclaration
+                            // redeclaration - always should be renamed
                             links.isDeclaratonWithCollidingName = true;
                         }
                         else if (nodeLinks.flags & NodeCheckFlags.CapturedBlockScopedBinding) {
-                            // captured name
-                            const capturedInLoop = nodeLinks.flags & NodeCheckFlags.BlockScopedBindingInLoop;
+                            // binding is captured in the function
+                            // should be renamed if:
+                            // - binding is not top level - top level bindings never collide with anything
+                            // AND
+                            //   - binding is not declared in loop, should be renamed to avoid name reuse across siblings
+                            //     let a, b 
+                            //     { let x = 1; a = () => x;  }
+                            //     { let x = 100; b = () => x; }
+                            //     console.log(a()); // should print '1'
+                            //     console.log(b()); // should print '100'
+                            //     OR
+                            //   - binding is declared inside loop but not in inside initializer of iteration statement or directly inside loop body
+                            //     * variables from initializer are passed to rewritted loop body as parameters so they are not captured directly
+                            //     * variables that are declared immediately in loop body will become top level variable after loop is rewritten and thus
+                            //       they will not collide with anything
+                            const isTopLevel = isFunctionBlock(container);
+                            const isDeclaredInLoop = nodeLinks.flags & NodeCheckFlags.BlockScopedBindingInLoop;
                             const inLoopInitializer = isIterationStatement(container, /*lookInLabeledStatements*/ false);
-                            const inLoopBodyBlock = 
-                                container.kind === SyntaxKind.Block && 
-                                isIterationStatement(container.parent, /*lookInLabeledStatements*/ false);
+                            const inLoopBodyBlock = container.kind === SyntaxKind.Block && isIterationStatement(container.parent, /*lookInLabeledStatements*/ false);
 
-                            links.isDeclaratonWithCollidingName =
-                                !isFunctionBlock(container) &&
-                                (!capturedInLoop || (!inLoopInitializer && !inLoopBodyBlock));
+                            links.isDeclaratonWithCollidingName = !isTopLevel && (!isDeclaredInLoop || (!inLoopInitializer && !inLoopBodyBlock));
                         }
                         else {
                             links.isDeclaratonWithCollidingName = false;
