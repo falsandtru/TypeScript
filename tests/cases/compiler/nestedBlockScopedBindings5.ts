@@ -1,5 +1,4 @@
 function a0() {
-    let y;
     for (let x in []) {
         x = x + 1;
     }
@@ -9,7 +8,6 @@ function a0() {
 }
 
 function a1() {
-    let y;
     for (let x in []) {
         x = x + 1;
         () => x;
@@ -20,7 +18,6 @@ function a1() {
 }
 
 function a2() {
-    let y;
     for (let x in []) {
         x = x + 1;
     }
@@ -32,7 +29,6 @@ function a2() {
 
 
 function a3() {
-    let y;
     for (let x in []) {
         x = x + 1;
         () => x;
@@ -51,7 +47,6 @@ function a3() {
 }
 
 function a4() {
-    let y;
     for (let x in []) {
         x = x + 1;
     }
@@ -83,8 +78,3 @@ function a5() {
     }
     
 }
-
-
-
-
-

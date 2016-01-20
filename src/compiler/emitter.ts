@@ -4037,29 +4037,62 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, Promi
                         node.name.kind === SyntaxKind.Identifier) {
 
                         const container = getEnclosingBlockScopeContainer(node);
-                        // for nested let bindings always generate explicit initializer unless they are captured in loop
-                        // downlevel emit for loops with captured block scoped bindings will introduce an explicit scope for every iteration
-                        // so values won't be shared between iterations
-                        //const container = getDeclarationContainer(node);
-                        const isNestedLet = 
+                        const flags = resolver.getNodeCheckFlags(node);
+
+                        // non-captured nested let bindings might need to be initialized explicitly to preserve ES6 semantic
+                        // { let x = 1; }
+                        // { let x; } // x here should be undefined. not 1
+                        // NOTES: 
+                        // * why only non-captured bindings? The reason why we don't do this for captured bindings is because captured binding are either renamed 
+                        // so name collision is avoided or for captured bindings defined in the loop we generate an explicit scope - again no name collision/reuse.
+                        // * why only nested bindings? because they can collide with names declared in the outer scope.
+                        const nestedLet =
                             getCombinedNodeFlags(node) & NodeFlags.Let &&
                             isStatementWithLocals(container) &&
                             !isFunctionLike(container.parent);
-
-                        const flags = resolver.getNodeCheckFlags(node);
-
+                            
+                        const renamed = resolver.isDeclarationWithCollidingName(node);
+                        const captured = flags & NodeCheckFlags.CapturedBlockScopedBinding;
+                        const inLoop = flags & NodeCheckFlags.BlockScopedBindingInLoop;
                         const emitInitializer =
-                            isNestedLet &&
-                            (flags & NodeCheckFlags.CapturedNestedBlockScopedBinding) === 0 &&
-                            //(flags & NodeCheckFlags.BlockScopedBindingDefinedInLoop || !resolver.isDeclarationWithCollidingName(node)) &&
+                            nestedLet &&
                             container.kind !== SyntaxKind.ForInStatement &&
-                            container.kind !== SyntaxKind.ForOfStatement;
-                        // NOTES: 
-                        // * initialize nested let bindings if
-                        //   - they are not captured (so they won;t see old values)
-                        //   - if they are defined in for-statement initializer
-                        // * there is no point to initialize bindings that will also be renamed
-                        // * default initialization should not be added to let bindings in for-in\for-of statements
+                            container.kind !== SyntaxKind.ForOfStatement &&
+                            (
+                                !renamed || 
+                                (inLoop && !captured)
+                                //!captured// isIterationStatement(container, /*lookInLabeledStatements*/ false)
+                                // (!renamed && isIterationStatement(container, /*lookInLabeledStatements*/ false)) ||
+                                //  !renamed && (!captured || )
+                                // // variable in loop initializer
+                                // isIterationStatement(container, /*lookInLabeledStatements*/ false) ||
+                                // renamed && 
+                                // // declared in the loop initializer and was not renamed
+                                // (isIterationStatement(container, /*lookInLabeledStatements*/ false) || !resolver.isDeclarationWithCollidingName(node)) ||
+                                // // not captured
+                                // (((flags & NodeCheckFlags.CapturedBlockScopedBinding) === 0)
+                                
+                                // ((flags & NodeCheckFlags.CapturedBlockScopedBinding) === 0 && !resolver.isDeclarationWithCollidingName(node)) ||
+                                // (flags & NodeCheckFlags.BlockScopedBindingInLoop) ||
+                                // isIterationStatement(container, /*lookInLabeledStatements*/ false)
+                            );
+
+                        // const emitInitializer =
+                        //     flags & NodeCheckFlags.BlockScopedBindingInLoop &&
+                        //     // do not emit initializers for bindings that were already renamed unlesss these binding is declared in the loop
+                        //     // in this case initializer is still necessary to erase value from the previous iteration
+                        //     // i.e. 
+                        //     // var x;
+                        //     // for(;;) { let x; console.log(x); x = 1; }
+                        //     // should become
+                        //     // var x;
+                        //     // for(;;) { let x_1 = void 0; console.log(x_1); x_1 = 1; } 
+                        //     // so 'undefined' will be printed for all iterations 
+                        //     // (flags & NodeCheckFlags.BlockScopedBindingDefinedInLoop || !resolver.isDeclarationWithCollidingName(node)) &&
+                        //     // don't emit initializers for variables declared inside initializers for ForIn / ForOf statements
+                        //     container.kind !== SyntaxKind.ForInStatement &&
+                        //     container.kind !== SyntaxKind.ForOfStatement;
+
                         if (emitInitializer) {
                             initializer = createVoidZero();
                         }
