@@ -268,6 +268,13 @@ namespace ts {
             ((<ModuleDeclaration>node).name.kind === SyntaxKind.StringLiteral || isGlobalScopeAugmentation(<ModuleDeclaration>node));
     }
 
+    export function isBlockScopedContainerTopLevel(node: Node): boolean {
+        return node.kind === SyntaxKind.SourceFile ||
+            node.kind === SyntaxKind.ModuleDeclaration ||
+            isFunctionLike(node) ||
+            isFunctionBlock(node);
+    }
+
     export function isGlobalScopeAugmentation(module: ModuleDeclaration): boolean {
         return !!(module.flags & NodeFlags.GlobalAugmentation);
     }

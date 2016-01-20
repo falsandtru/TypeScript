@@ -15403,12 +15403,11 @@ namespace ts {
                             //     * variables from initializer are passed to rewritted loop body as parameters so they are not captured directly
                             //     * variables that are declared immediately in loop body will become top level variable after loop is rewritten and thus
                             //       they will not collide with anything
-                            const isTopLevel = isFunctionBlock(container);
                             const isDeclaredInLoop = nodeLinks.flags & NodeCheckFlags.BlockScopedBindingInLoop;
                             const inLoopInitializer = isIterationStatement(container, /*lookInLabeledStatements*/ false);
                             const inLoopBodyBlock = container.kind === SyntaxKind.Block && isIterationStatement(container.parent, /*lookInLabeledStatements*/ false);
 
-                            links.isDeclaratonWithCollidingName = !isTopLevel && (!isDeclaredInLoop || (!inLoopInitializer && !inLoopBodyBlock));
+                            links.isDeclaratonWithCollidingName = !isBlockScopedContainerTopLevel(container) && (!isDeclaredInLoop || (!inLoopInitializer && !inLoopBodyBlock));
                         }
                         else {
                             links.isDeclaratonWithCollidingName = false;

@@ -4059,14 +4059,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         const isDeclaredInLoop = flags & NodeCheckFlags.BlockScopedBindingInLoop;
 
                         const emittedAsTopLevel =
-                            container.kind === SyntaxKind.SourceFile ||
-                            container.kind === SyntaxKind.ModuleDeclaration ||
-                            isFunctionLike(container.parent) ||
+                            isBlockScopedContainerTopLevel(container) ||
                             (isCapturedInFunction && isDeclaredInLoop && container.kind === SyntaxKind.Block && isIterationStatement(container.parent, /*lookInLabeledStatements*/ false));
 
                         const emittedAsNestedLetDeclaration =
                             getCombinedNodeFlags(node) & NodeFlags.Let &&
-                            ((isStatementWithLocals(container) && !isFunctionLike(container.parent))) &&
                             !emittedAsTopLevel;
 
                         const emitExplicitInitializer =
