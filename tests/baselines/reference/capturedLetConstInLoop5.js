@@ -398,7 +398,7 @@ function foo5(x) {
 }
 function foo6(x) {
     var _loop_8 = function() {
-        var x_8, y = void 0;
+        var x_8, y;
         v = x_8;
         (function () { return x_8 + y + v; });
         (function () { return x_8 + y + v; });
@@ -416,7 +416,7 @@ function foo6(x) {
 }
 function foo7(x) {
     var _loop_9 = function() {
-        var x_9, y = void 0;
+        var x_9, y;
         v = x_9;
         (function () { return x_9 + y + v; });
         (function () { return x_9 + y + v; });

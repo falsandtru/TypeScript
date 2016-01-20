@@ -11,7 +11,7 @@ for (; false;) {
 
 //// [nestedBlockScopedBindings13.js]
 var _loop_1 = function() {
-    var x = void 0;
+    var x;
     (function () { return x; });
 };
 for (; false;) {

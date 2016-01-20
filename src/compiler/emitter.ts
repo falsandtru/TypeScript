@@ -4055,16 +4055,22 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
                         //   * Why non-captured binding - because if loop contains block scoped binding captured in some function then loop body will be rewritten 
                         //   to have a fresh scope on every iteration so everything will just work.
                         //   * Why loop initializer is excluded - since we've introduced a fresh name it already will be undefined.
-                        const isNestedLetDeclaration =
-                            getCombinedNodeFlags(node) & NodeFlags.Let &&
-                            isStatementWithLocals(container) &&
-                            !isFunctionLike(container.parent);
-
                         const isCapturedInFunction = flags & NodeCheckFlags.CapturedBlockScopedBinding;
                         const isDeclaredInLoop = flags & NodeCheckFlags.BlockScopedBindingInLoop;
 
+                        const emittedAsTopLevel =
+                            container.kind === SyntaxKind.SourceFile ||
+                            container.kind === SyntaxKind.ModuleDeclaration ||
+                            isFunctionLike(container.parent) ||
+                            (isCapturedInFunction && isDeclaredInLoop && container.kind === SyntaxKind.Block && isIterationStatement(container.parent, /*lookInLabeledStatements*/ false));
+
+                        const emittedAsNestedLetDeclaration =
+                            getCombinedNodeFlags(node) & NodeFlags.Let &&
+                            ((isStatementWithLocals(container) && !isFunctionLike(container.parent))) &&
+                            !emittedAsTopLevel;
+
                         const emitExplicitInitializer =
-                            isNestedLetDeclaration &&
+                            emittedAsNestedLetDeclaration &&
                             container.kind !== SyntaxKind.ForInStatement &&
                             container.kind !== SyntaxKind.ForOfStatement &&
                             (
