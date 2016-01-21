@@ -2159,7 +2159,7 @@
         "category": "Error",
         "code": 5059
     },
-    "Option '{0}' can only be used when option 'moduleResolution' is 'baseUrl'.": {
+    "Option 'paths' cannot be used without specifying '--baseUrl' option.": {
         "category": "Error",
         "code": 5060
     },

@@ -256,8 +256,6 @@ namespace ts {
             type: {
                 "node": ModuleResolutionKind.NodeJs,
                 "classic": ModuleResolutionKind.Classic,
-                // name is lowercased so we can still use hasProperty(userValue.toLower()) to check if user has entered the right value
-                "baseurl": ModuleResolutionKind.BaseUrlOnly,
             },
             description: Diagnostics.Specifies_module_resolution_strategy_Colon_node_Node_js_or_classic_TypeScript_pre_1_6,
             error: Diagnostics.Argument_for_moduleResolution_option_must_be_node_classic_or_baseUrl,
