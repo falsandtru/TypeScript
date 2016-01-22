@@ -985,9 +985,6 @@ namespace Harness {
             if (harnessSettings) {
                 setCompilerOptionsFromHarnessSetting(harnessSettings, options);
             }
-            if (options.inferredBaseUrl) {
-                options.inferredBaseUrl = ts.getNormalizedAbsolutePath(options.inferredBaseUrl, currentDirectory);
-            }
             if (options.rootDirs) {
                 options.rootDirs = ts.map(options.rootDirs, d => ts.getNormalizedAbsolutePath(d, currentDirectory));
             }

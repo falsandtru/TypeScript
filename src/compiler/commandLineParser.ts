@@ -527,8 +527,6 @@ namespace ts {
         const { options: optionsFromJsonConfigFile, errors } = convertCompilerOptionsFromJson(json["compilerOptions"], basePath);
 
         const options = extend(existingOptions, optionsFromJsonConfigFile);
-        // set basePath as inferredBaseUrl so baseUrl module resolution strategy can still work even if user have not specified baseUrl explicity
-        options.inferredBaseUrl = basePath;
 
         return {
             options,

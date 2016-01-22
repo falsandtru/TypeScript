@@ -75,10 +75,8 @@ namespace ts {
         return true;
     }
 
-    const unresolvedModule: ResolvedModule = { resolvedFileName: undefined };
-
-    function createResolvedModule(resolvedFileName: string, failedLookupLocations: string[]): ResolvedModuleWithFailedLookupLocations {
-        return { resolvedModule: resolvedFileName ? { resolvedFileName } : unresolvedModule, failedLookupLocations };
+    function createResolvedModule(resolvedFileName: string, isExternalLibraryImport: boolean, failedLookupLocations: string[]): ResolvedModuleWithFailedLookupLocations {
+        return { resolvedModule: resolvedFileName ? { resolvedFileName, isExternalLibraryImport } : undefined, failedLookupLocations };
     }
 
     function moduleHasNonRelativeName(moduleName: string): boolean {
@@ -353,20 +351,22 @@ namespace ts {
             failedLookupLocations, supportedExtensions, state);
 
         if (resolvedFileName) {
-            return createResolvedModule(resolvedFileName, failedLookupLocations);
+            return createResolvedModule(resolvedFileName, /*isExternalLibraryImport*/false, failedLookupLocations);
         }
-        
+
+        let isExternalLibraryImport = false;
         if (moduleHasNonRelativeName(moduleName)) {
             if (traceEnabled) {
                 trace(host, Diagnostics.Loading_module_0_from_node_modules_folder, moduleName);
             }
             resolvedFileName = loadModuleFromNodeModules(moduleName, containingDirectory, failedLookupLocations, state);
+            isExternalLibraryImport = resolvedFileName !== undefined;
         }
         else {
             const candidate = normalizePath(combinePaths(containingDirectory, moduleName));
             resolvedFileName = nodeLoadModuleByRelativeName(candidate, supportedExtensions, failedLookupLocations, /*onlyRecordFailures*/ false, state);
         }
-        return createResolvedModule(resolvedFileName, failedLookupLocations);
+        return createResolvedModule(resolvedFileName, isExternalLibraryImport, failedLookupLocations);
     }
 
     function nodeLoadModuleByRelativeName(candidate: string, supportedExtensions: string[], failedLookupLocations: string[],
@@ -498,10 +498,10 @@ namespace ts {
         const failedLookupLocations: string[] = [];
         const supportedExtensions = getSupportedExtensions(compilerOptions);
         let containingDirectory = getDirectoryPath(containingFile);
-
+        
         const resolvedFileName = tryLoadModuleUsingOptionalResolutionSettings(moduleName, containingDirectory, loadModuleFromFile, failedLookupLocations, supportedExtensions, state);            
         if (resolvedFileName) {
-            return createResolvedModule(resolvedFileName, failedLookupLocations);
+            return createResolvedModule(resolvedFileName, /*isExternalLibraryImport*/false, failedLookupLocations);
         }
 
         // module names that contain '!' are used to reference resources and are not resolved to actual files on disk
@@ -512,37 +512,14 @@ namespace ts {
             return { resolvedModule: undefined, failedLookupLocations: [] };
         }
 
-        let searchName: string;
-
         let referencedSourceFile: string;
         while (true) {
-            searchName = normalizePath(combinePaths(containingDirectory, moduleName));
-            referencedSourceFile = forEach(supportedExtensions, extension => {
-                if (extension === ".tsx" && !compilerOptions.jsx) {
-                    // resolve .tsx files only if jsx support is enabled 
-                    // 'logical not' handles both undefined and None cases
-                    return undefined;
-                }
-
-                const candidate = searchName + extension;
-                if (host.fileExists(candidate)) {
-                    if (traceEnabled) {
-                        trace(host, Diagnostics.File_0_exist_use_it_as_a_module_resolution_result, candidate);
-                    }
-                    return candidate;
-                }
-                else {
-                    if (traceEnabled) {
-                        trace(host, Diagnostics.File_0_does_not_exist, candidate);
-                    }
-                    failedLookupLocations.push(candidate);
-                }
-            });
-
+            const searchName = normalizePath(combinePaths(containingDirectory, moduleName));
+            const directoryName = getDirectoryPath(searchName);
+            referencedSourceFile = loadModuleFromFile(searchName, supportedExtensions, failedLookupLocations, !directoryProbablyExists(directoryName, host), state)
             if (referencedSourceFile) {
                 break;
             }
-
             const parentPath = getDirectoryPath(containingDirectory);
             if (parentPath === containingDirectory) {
                 break;
@@ -1480,7 +1457,7 @@ namespace ts {
                     // - resolution was successfull
                     // - noResolve is falsy
                     // - module name come from the list fo imports
-                    const shouldAddFile = resolution &&
+                    const shouldAddFile = resolution 
                         !options.noResolve &&
                         i < file.imports.length;
 
