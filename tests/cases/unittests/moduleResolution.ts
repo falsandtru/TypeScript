@@ -897,14 +897,6 @@ import b = require("./moduleB.ts");
                 ]);
             }
         })
-
-        it ("node + path mappings + rootDirs", () => {
-            assert(false, "TODO: implement");
-        });
-
-        it ("classic + path mappings + rootDirs", () => {
-            assert(false, "TODO: implement");
-        });
     });
 
     function notImplemented(name: string): () => any {
