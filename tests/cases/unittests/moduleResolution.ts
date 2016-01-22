@@ -870,6 +870,34 @@ import b = require("./moduleB.ts");
             }
         });
 
+        it ("nested node module", () => {
+            test(/*hasDirectoryExists*/ false);
+            test(/*hasDirectoryExists*/ true);
+
+            function test(hasDirectoryExists: boolean) {
+                const app: File = { name: "/root/src/app.ts" }
+                const libsPackage: File = { name: "/root/src/libs/guid/package.json", content: JSON.stringify({ typings: "dist/guid.d.ts" }) };
+                const libsTypings: File = { name: "/root/src/libs/guid/dist/guid.d.ts" };
+                const host = createModuleResolutionHost(hasDirectoryExists, app, libsPackage, libsTypings);
+                const options: CompilerOptions = { 
+                    moduleResolution: ModuleResolutionKind.NodeJs, 
+                    baseUrl: "/root",
+                    paths: {
+                        "libs/guid": [ "src/libs/guid" ]
+                    }
+                 };
+                const result = resolveModuleName("libs/guid", app.name, options, host);
+                assert.isTrue(result.resolvedModule !== undefined, "module should be resolved");
+                assert.equal(result.resolvedModule.resolvedFileName, libsTypings.name);
+                assert.deepEqual(result.failedLookupLocations, [
+                    // first try to load module as file
+                    "/root/src/libs/guid.ts",
+                    "/root/src/libs/guid.tsx",
+                    "/root/src/libs/guid.d.ts",
+                ]);
+            }
+        })
+
         it ("node + path mappings + rootDirs", () => {
             assert(false, "TODO: implement");
         });
