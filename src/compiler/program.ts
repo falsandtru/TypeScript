@@ -208,8 +208,9 @@ namespace ts {
 
     type ResolutionKindSpecificLoader = (candidate: string, extensions: string[], failedLookupLocations: string[], onlyRecordFalures: boolean, state: ModuleResolutionState) => string;
 
-    function doInitialResolution(moduleName: string, containingDirectory: string, loader: ResolutionKindSpecificLoader, failedLookupLocations: string[],
-        supportedExtensions: string[], state: ModuleResolutionState): string {
+    function tryLoadModuleUsingOptionalResolutionSettings(moduleName: string, containingDirectory: string, loader: ResolutionKindSpecificLoader, 
+        failedLookupLocations: string[], supportedExtensions: string[], state: ModuleResolutionState): string {
+        
         if (moduleHasNonRelativeName(moduleName)) {
             return tryLoadModuleUsingBaseUrl(moduleName, loader, failedLookupLocations, supportedExtensions, state);
         }
@@ -218,8 +219,8 @@ namespace ts {
         }
     }
 
-    function tryLoadModuleUsingRootDirs(moduleName: string, containingDirectory: string, loader: ResolutionKindSpecificLoader, failedLookupLocations: string[], 
-        supportedExtensions: string[], state: ModuleResolutionState): string {
+    function tryLoadModuleUsingRootDirs(moduleName: string, containingDirectory: string, loader: ResolutionKindSpecificLoader,
+        failedLookupLocations: string[], supportedExtensions: string[], state: ModuleResolutionState): string {
 
         if (!state.compilerOptions.rootDirs) {
             return undefined;
@@ -348,21 +349,22 @@ namespace ts {
 
         const failedLookupLocations: string[] = [];
         const state = {compilerOptions, host, traceEnabled};
-        let resolvedFileName = doInitialResolution(moduleName, containingDirectory, nodeLoadModuleByRelativeName, failedLookupLocations, supportedExtensions, state);
+        let resolvedFileName = tryLoadModuleUsingOptionalResolutionSettings(moduleName, containingDirectory, nodeLoadModuleByRelativeName, 
+            failedLookupLocations, supportedExtensions, state);
 
         if (resolvedFileName) {
             return createResolvedModule(resolvedFileName, failedLookupLocations);
         }
         
-        if (isRootedDiskPath(moduleName) || nameStartsWithDotSlashOrDotDotSlash(moduleName)) {
-            const candidate = normalizePath(combinePaths(containingDirectory, moduleName));
-            resolvedFileName = nodeLoadModuleByRelativeName(candidate, supportedExtensions, failedLookupLocations, /*onlyRecordFailures*/ false, state);
-        }
-        else {
+        if (moduleHasNonRelativeName(moduleName)) {
             if (traceEnabled) {
                 trace(host, Diagnostics.Loading_module_0_from_node_modules_folder, moduleName);
             }
             resolvedFileName = loadModuleFromNodeModules(moduleName, containingDirectory, failedLookupLocations, state);
+        }
+        else {
+            const candidate = normalizePath(combinePaths(containingDirectory, moduleName));
+            resolvedFileName = nodeLoadModuleByRelativeName(candidate, supportedExtensions, failedLookupLocations, /*onlyRecordFailures*/ false, state);
         }
         return createResolvedModule(resolvedFileName, failedLookupLocations);
     }
@@ -371,8 +373,7 @@ namespace ts {
         onlyRecordFailures: boolean, state: ModuleResolutionState): string {
 
         if (state.traceEnabled) {
-             // TODO
-            //trace(host, Diagnostics.Loading_module_0_as_file_Slash_folder_candidate_module_location_1, moduleName, candidate);
+            trace(state.host, Diagnostics.Loading_module_as_file_Slash_folder_candidate_module_location_0, candidate);
         }
 
         const resolvedFileName = loadModuleFromFile(candidate, supportedExtensions, failedLookupLocations, onlyRecordFailures, state);
@@ -498,8 +499,7 @@ namespace ts {
         const supportedExtensions = getSupportedExtensions(compilerOptions);
         let containingDirectory = getDirectoryPath(containingFile);
 
-        const resolvedFileName = doInitialResolution(moduleName, containingDirectory, loadModuleFromFile, failedLookupLocations, supportedExtensions, state);
-            
+        const resolvedFileName = tryLoadModuleUsingOptionalResolutionSettings(moduleName, containingDirectory, loadModuleFromFile, failedLookupLocations, supportedExtensions, state);            
         if (resolvedFileName) {
             return createResolvedModule(resolvedFileName, failedLookupLocations);
         }
@@ -513,7 +513,6 @@ namespace ts {
         }
 
         let searchName: string;
-
 
         let referencedSourceFile: string;
         while (true) {
