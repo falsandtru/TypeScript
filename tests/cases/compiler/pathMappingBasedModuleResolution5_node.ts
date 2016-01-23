@@ -1,21 +1,18 @@
-// @module: amd
+// @module: commonjs
 
 // paths is defined in tsconfig.json
-// baseUrl is specified in tsconfig.json
-
 // @filename: c:/root/tsconfig.json
 {
     "compilerOptions": {
-        "baseUrl": "./src",
-        "paths": {
+        "baseUrl": ".",
+            "paths": {
             "*": [
                 "*",
-                "generated/*",
-                "c:/sharedrepo/*"
+                "generated/*"
             ],
-            "components/*": [
-                "shared/components/*"
-            ]
+                "components/*": [
+                    "shared/components/*"
+                ]
         }
     }
 }
@@ -32,14 +29,14 @@ use(y.toExponential());
 use(z.toExponential());
 use(z1.toExponential());
 
-// @filename: c:/root/src/folder2/file1.ts
+// @filename: c:/root/folder2/file1.ts
 export var x = 1;
 
-// @filename: c:/root/src/generated/folder3/file2.ts
+// @filename: c:/root/generated/folder3/file2.ts
 export var y = 1;
 
-// @filename: c:/root/src/shared/components/file3.ts
-export var z = 1;
+// @filename: c:/root/shared/components/file3/index.d.ts
+export var z: number;
 
-// @filename: c:/sharedrepo/file4.ts
+// @filename: c:/node_modules/file4.ts
 export var z1 = 1;

@@ -1,20 +1,18 @@
 // @module: amd
 
 // paths is defined in tsconfig.json
-// module resolution kind is inferred from the presence of 'paths'
-
 // @filename: c:/root/tsconfig.json
 {
     "compilerOptions": {
+        "baseUrl": ".",
         "paths": {
             "*": [
                 "*",
-                "generated/*",
-                "c:/sharedrepo/*"
+                "generated/*"
             ],
-            "components/*": [
-                "shared/components/*"
-            ]
+                "components/*": [
+                    "shared/components/*"
+                ]
         }
     }
 }
@@ -40,5 +38,5 @@ export var y = 1;
 // @filename: c:/root/shared/components/file3.ts
 export var z = 1;
 
-// @filename: c:/sharedrepo/file4.ts
+// @filename: c:/file4.ts
 export var z1 = 1;
