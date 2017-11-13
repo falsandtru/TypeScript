@@ -2,27 +2,20 @@ language: node_js
 
 node_js:
   - 'stable'
-  - '8'
-  - '6'
 
 sudo: false
 
-env:
-  - workerCount=3
-
 matrix:
   fast_finish: true
-
-branches:
-  only:
-  - master
-  - release-2.5
-  - release-2.6
 
 install:
   - npm uninstall typescript --no-save
   - npm uninstall tslint --no-save
   - npm install
+
+script:
+  - npm run build
+  - node built/local/tsc.js index.ts
 
 cache:
   directories:
